@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Encuesta – BITA, ÉXITO y VALOR (Piloto)</title>
+  <meta name="description" content="Cuestionario académico (pilotaje) sobre madurez BITA, éxito de proyectos de TD y valor de negocio." />
+  <style>
+    /* (MISMO CSS DEL HTML ANTERIOR: lo dejo intacto para no alargar aquí)
+       Puedes pegar exactamente el CSS que ya tenías. */
+  </style>
+</head>
+
+<body>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="wrap">
+    <!-- (MISMA ESTRUCTURA HTML DEL ANTERIOR: header, consent, definitions, survey, refs, stickybar)
+         Puedes pegar exactamente la estructura que ya tenías.
+         Solo agrego un bloque visible de estado de envío en Survey. -->
+
+    <!-- ... tu header y secciones ... -->
+
+    <section class="card" id="survey" style="display:none;">
+      <h2>3) Cuestionario</h2>
+
+      <!-- Bloque de estado de envío centralizado -->
+      <div class="notice" id="collectorNotice" style="display:none; margin-top:10px;">
+        <strong>Recolección centralizada:</strong>
+        al finalizar, tus respuestas se enviarán de forma segura al repositorio del estudio. Si hubiera un problema de red, podrás descargar un respaldo.
+      </div>
+
+      <div id="questionnaireRoot"></div>
+
+      <h3>Sección D. Datos de caracterización (marque una opción por ítem)</h3>
+      <div class="grid2" id="demographics"></div>
+
+      <h3>Comentarios finales (piloto)</h3>
+      <div>
+        <label for="openComments">Comentarios / sugerencias</label>
+        <input type="text" id="openComments" placeholder="Escribe aquí tus comentarios (opcional)" />
+      </div>
+
+      <div class="btnbar" style="margin-top:14px;">
+        <button id="btnValidate" type="button">Validar respuestas</button>
+        <button id="btnSubmit" type="button">Finalizar y enviar</button>
+        <button class="secondary" id="btnDownloadCSV" type="button">Descargar CSV</button>
+        <button class="secondary" id="btnSaveLocal" type="button">Guardar borrador</button>
+        <button class="secondary" id="btnLoadLocal" type="button">Cargar borrador</button>
+        <button class="danger" id="btnReset" type="button">Reiniciar</button>
+      </div>
+
+      <div class="foot" id="collectorFoot">
+        Nota: Si el envío centralizado fallara por conectividad, podrás descargar un respaldo (JSON/CSV) para no perder la respuesta.
+      </div>
+    </section>
+
+    <!-- ... refs y el resto ... -->
+
+  </div>
+
+  <script>
+    /******************************************************************
+     *  0) CONFIG: RECOLECCIÓN CENTRALIZADA
+     ******************************************************************/
+    const ENABLE_CENTRAL_COLLECTION = true;
+
+    // Pega aquí el URL de tu Web App (Google Apps Script) o tu API.
+    // Ejemplo: https://script.google.com/macros/s/AKfycbxxxxxx/exec
+    const COLLECTOR_URL = "PEGAR_AQUI_TU_ENDPOINT";
+
+    // Si quieres un “token simple” para evitar envíos casuales (no es seguridad fuerte)
+    // lo puedes validar en el servidor.
+    const COLLECTOR_TOKEN = ""; // opcional
+
+    /******************************************************************
+     *  1) (EL MISMO ESQUEMA DEL CUESTIONARIO QUE YA TENÍAS)
+     *      - LIKERT, SURVEY_SCHEMA, DEMOGRAPHICS_SCHEMA
+     *      - RENDER, VALIDATION, DOWNLOADS, LOCAL STORAGE, ETC.
+     *
+     *  Para mantener esta respuesta clara, aquí asumo que copias/pegas
+     *  TODO tu JS previo (exactamente igual) y solo insertas:
+     *    - sendToCollector(payload)
+     *    - y modificas el handler de btnSubmit
+     ******************************************************************/
+
+    // ===========
+    // PEGA AQUÍ TU: LIKERT, SURVEY_SCHEMA, DEMOGRAPHICS_SCHEMA
+    // Y TODO TU JS DE RENDER (igual al anterior)
+    // ===========
+
+    /******************************************************************
+     *  2) ENVÍO CENTRALIZADO
+     ******************************************************************/
+    async function sendToCollector(payload){
+      if(!ENABLE_CENTRAL_COLLECTION) {
+        return { ok: true, skipped: true };
+      }
+      if(!COLLECTOR_URL || COLLECTOR_URL.includes("PEGAR_AQUI")) {
+        return { ok: false, error: "COLLECTOR_URL no está configurado." };
+      }
+
+      const body = {
+        token: COLLECTOR_TOKEN || undefined,
+        payload
+      };
+
+      try{
+        const resp = await fetch(COLLECTOR_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(body)
+        });
+
+        // Algunos endpoints devuelven 200 con texto.
+        const contentType = resp.headers.get("content-type") || "";
+        let data = null;
+        if(contentType.includes("application/json")){
+          data = await resp.json();
+        } else {
+          const t = await resp.text();
+          try { data = JSON.parse(t); } catch { data = { raw: t }; }
+        }
+
+        if(!resp.ok){
+          return { ok:false, status: resp.status, data };
+        }
+        return { ok:true, data };
+      }catch(err){
+        return { ok:false, error: String(err) };
+      }
+    }
+
+    /******************************************************************
+     *  3) MODIFICACIÓN DEL BOTÓN “FINALIZAR”
+     *  - Valida
+     *  - Envía al colector
+     *  - Si OK: muestra confirmación
+     *  - Si falla: ofrece respaldo (descarga JSON/CSV)
+     ******************************************************************/
+    // IMPORTANTE: en tu JS original ya existe:
+    //  - validateAll()
+    //  - buildPayload()
+    //  - download(filename, text, mime)
+    //  - toCSV(payload)
+    //  - showToast(msg)
+    //
+    // Aquí solo reemplaza el listener anterior de btnSubmit por este:
+
+    document.addEventListener("DOMContentLoaded", ()=>{
+      const collectorNotice = document.getElementById("collectorNotice");
+      if(ENABLE_CENTRAL_COLLECTION) collectorNotice.style.display = "block";
+
+      const btnSubmit = document.getElementById("btnSubmit");
+      if(btnSubmit){
+        btnSubmit.addEventListener("click", async ()=>{
+          // sincroniza comentarios (si tu JS lo hace distinto, respétalo)
+          const openComments = document.getElementById("openComments");
+          if(openComments) state.comments = openComments.value || "";
+
+          const res = validateAll();
+          if(!res.ok){
+            alert("Antes de finalizar, completa lo pendiente:\n\n- " + res.problems.join("\n- "));
+            return;
+          }
+
+          const payload = buildPayload();
+
+          // 1) Intentar envío centralizado
+          showToast("Enviando respuestas…");
+          btnSubmit.disabled = true;
+          btnSubmit.textContent = "Enviando…";
+
+          const sendRes = await sendToCollector(payload);
+
+          btnSubmit.disabled = false;
+          btnSubmit.textContent = "Finalizar y enviar";
+
+          if(sendRes.ok){
+            const receipt = sendRes.data?.receipt_id || sendRes.data?.id || sendRes.data?.rowId || "";
+            showToast("Envío exitoso ✅");
+            alert(
+              "¡Gracias! Tu respuesta fue enviada correctamente." +
+              (receipt ? ("\n\nCódigo de registro: " + receipt) : "")
+            );
+            return;
+          }
+
+          // 2) Si falla, no perder datos: descargar respaldo
+          console.error("Collector error:", sendRes);
+          showToast("No se pudo enviar. Generando respaldo…");
+
+          const ts = new Date().toISOString().slice(0,19).replaceAll(":","-");
+          download(`respuestas_bita_piloto_${ts}.json`, JSON.stringify(payload, null, 2), "application/json");
+          const csv = toCSV(payload);
+          download(`respuestas_bita_piloto_${ts}.csv`, csv, "text/csv");
+
+          alert(
+            "No se pudo completar el envío centralizado (posible problema de red o del servidor).\n\n" +
+            "Para no perder tu respuesta, se descargó un respaldo en JSON y CSV.\n" +
+            "Si estás participando en el piloto, por favor comparte el archivo JSON con el investigador."
+          );
+        });
+      }
+    });
+  </script>
+</body>
+</html>

@@ -419,17 +419,14 @@
 
       <div class="btnbar" style="margin-top:14px;">
         <button id="btnValidate" type="button">Validar respuestas</button>
-        <button id="btnSubmit" type="button">Finalizar y generar archivo (JSON)</button>
+        <button id="btnSubmit" type="button">Finalizar y enviar</button>
         <button class="secondary" id="btnDownloadCSV" type="button">Descargar CSV</button>
         <button class="secondary" id="btnSaveLocal" type="button">Guardar borrador en este navegador</button>
         <button class="secondary" id="btnLoadLocal" type="button">Cargar borrador</button>
         <button class="danger" id="btnReset" type="button">Reiniciar</button>
       </div>
-
-      <div class="foot">
-        Nota: Este HTML no envía datos a ningún servidor. Para recolectar respuestas de un grupo, puedes:
-        (a) incrustar este cuestionario en una plataforma que guarde resultados (Google Forms/Qualtrics/Typeform), o
-        (b) agregar un endpoint propio (API) para recibir el JSON generado.
+      <div class="foot" id="collectorFoot">
+        Nota: Si el envío centralizado fallara por conectividad, podrás descargar un respaldo (JSON/CSV) para no perder la respuesta.
       </div>
     </section>
 
@@ -462,6 +459,19 @@
   </div>
 
   <script>
+     /******************************************************************
+     *  0) CONFIG: RECOLECCIÓN CENTRALIZADA
+     ******************************************************************/
+    const ENABLE_CENTRAL_COLLECTION = true;
+
+    // Pega aquí el URL de tu Web App (Google Apps Script) o tu API.
+    // Ejemplo: https://script.google.com/macros/s/AKfycbxxxxxx/exec
+    const COLLECTOR_URL = "https://script.google.com/macros/s/AKfycbx4Us4ZI3oWlJU8tOMqdkSrXeNChRW5NxhB2I1c_9tYHt1rTfW79yuAM3jErLEB7mBc/exec";
+
+    // Si quieres un “token simple” para evitar envíos casuales (no es seguridad fuerte)
+    // lo puedes validar en el servidor.
+    const COLLECTOR_TOKEN = ""; // opcional
+
     /******************************************************************
      *  CONFIGURACIÓN DEL CUESTIONARIO (Apéndice B)
      ******************************************************************/
@@ -1153,14 +1163,105 @@
     });
 
     // Accessibility: keyboard hint
-    document.addEventListener("keydown", (e)=>{
-      if((e.ctrlKey || e.metaKey) && e.key.toLowerCase()==="s"){
-        // prevent browser save dialog on some contexts
-        e.preventDefault();
-        state.comments = document.getElementById("openComments")?.value || state.comments;
-        saveLocal();
+    document.addEventListener("DOMContentLoaded", ()=>{
+      const collectorNotice = document.getElementById("collectorNotice");
+      if(ENABLE_CENTRAL_COLLECTION) collectorNotice.style.display = "block";
+
+      const btnSubmit = document.getElementById("btnSubmit");
+      if(btnSubmit){
+        btnSubmit.addEventListener("click", async ()=>{
+          // sincroniza comentarios (si tu JS lo hace distinto, respétalo)
+          const openComments = document.getElementById("openComments");
+          if(openComments) state.comments = openComments.value || "";
+
+          const res = validateAll();
+          if(!res.ok){
+            alert("Antes de finalizar, completa lo pendiente:\n\n- " + res.problems.join("\n- "));
+            return;
+          }
+
+          const payload = buildPayload();
+
+          // 1) Intentar envío centralizado
+          showToast("Enviando respuestas…");
+          btnSubmit.disabled = true;
+          btnSubmit.textContent = "Enviando…";
+
+          const sendRes = await sendToCollector(payload);
+
+          btnSubmit.disabled = false;
+          btnSubmit.textContent = "Finalizar y enviar";
+
+          if(sendRes.ok){
+            const receipt = sendRes.data?.receipt_id || sendRes.data?.id || sendRes.data?.rowId || "";
+            showToast("Envío exitoso ✅");
+            alert(
+              "¡Gracias! Tu respuesta fue enviada correctamente." +
+              (receipt ? ("\n\nCódigo de registro: " + receipt) : "")
+            );
+            return;
+          }
+
+          // 2) Si falla, no perder datos: descargar respaldo
+          console.error("Collector error:", sendRes);
+          showToast("No se pudo enviar. Generando respaldo…");
+
+          const ts = new Date().toISOString().slice(0,19).replaceAll(":","-");
+          download(`respuestas_bita_piloto_${ts}.json`, JSON.stringify(payload, null, 2), "application/json");
+          const csv = toCSV(payload);
+          download(`respuestas_bita_piloto_${ts}.csv`, csv, "text/csv");
+
+          alert(
+            "No se pudo completar el envío centralizado (posible problema de red o del servidor).\n\n" +
+            "Para no perder tu respuesta, se descargó un respaldo en JSON y CSV.\n" +
+            "Si estás participando en el piloto, por favor comparte el archivo JSON con el investigador."
+          );
+        });
       }
     });
+    /******************************************************************
+     *  2) ENVÍO CENTRALIZADO
+     ******************************************************************/
+    async function sendToCollector(payload){
+      if(!ENABLE_CENTRAL_COLLECTION) {
+        return { ok: true, skipped: true };
+      }
+      if(!COLLECTOR_URL || COLLECTOR_URL.includes("PEGAR_AQUI")) {
+        return { ok: false, error: "COLLECTOR_URL no está configurado." };
+      }
+
+      const body = {
+        token: COLLECTOR_TOKEN || undefined,
+        payload
+      };
+
+      try{
+        const resp = await fetch(COLLECTOR_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(body)
+        });
+
+        // Algunos endpoints devuelven 200 con texto.
+        const contentType = resp.headers.get("content-type") || "";
+        let data = null;
+        if(contentType.includes("application/json")){
+          data = await resp.json();
+        } else {
+          const t = await resp.text();
+          try { data = JSON.parse(t); } catch { data = { raw: t }; }
+        }
+
+        if(!resp.ok){
+          return { ok:false, status: resp.status, data };
+        }
+        return { ok:true, data };
+      }catch(err){
+        return { ok:false, error: String(err) };
+      }
+    }
   </script>
 </body>
 </html>
