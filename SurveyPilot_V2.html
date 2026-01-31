@@ -1210,7 +1210,7 @@
     // Accessibility: keyboard hint
     document.addEventListener("DOMContentLoaded", ()=>{
       const collectorNotice = document.getElementById("collectorNotice");
-      if(ENABLE_CENTRAL_COLLECTION) collectorNotice.style.display = "block";
+      if(collectorNotice && ENABLE_CENTRAL_COLLECTION) collectorNotice.style.display = "block";
 
       const btnSubmit = document.getElementById("btnSubmit");
       if(btnSubmit){
