@@ -1281,18 +1281,17 @@
         return { ok: false, error: "COLLECTOR_URL no está configurado." };
       }
 
-      const body = {
-        token: COLLECTOR_TOKEN || undefined,
-        payload
-      };
+      // Para evitar el preflight CORS (OPTIONS) con muchos endpoints (como Google Apps Script),
+      // enviaremos como form-urlencoded en vez de JSON con header explícito.
+      // En el servidor (Apps Script) recibirás el contenido en `e.parameter.payload`.
+      const form = new URLSearchParams();
+      if(COLLECTOR_TOKEN) form.append('token', COLLECTOR_TOKEN);
+      form.append('payload', JSON.stringify(payload));
 
       try{
         const resp = await fetch(COLLECTOR_URL, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json"
-          },
-          body: JSON.stringify(body)
+          body: form
         });
 
         // Algunos endpoints devuelven 200 con texto.
