@@ -1107,17 +1107,9 @@
       }
     });
 
-    document.getElementById("btnSubmit").addEventListener("click", ()=>{
-      state.comments = document.getElementById("openComments").value || "";
-      const res = validateAll();
-      if(!res.ok){
-        alert("Antes de finalizar, completa lo pendiente:\n\n- " + res.problems.join("\n- "));
-        return;
-      }
-      const payload = buildPayload();
-      download(`respuestas_bita_piloto_${new Date().toISOString().slice(0,19).replaceAll(":","-")}.json`, JSON.stringify(payload, null, 2));
-      showToast("Archivo JSON generado ✅");
-    });
+    // El handler legacy que descargaba localmente ha sido reemplazado.
+    // El envío centralizado se maneja en el listener dentro de DOMContentLoaded más abajo.
+    document.getElementById("btnSubmit").addEventListener("click", (e)=>{ e.preventDefault(); /* no-op: submit manejado por el listener principal */ });
 
     document.getElementById("btnDownloadCSV").addEventListener("click", ()=>{
       state.comments = document.getElementById("openComments").value || "";
