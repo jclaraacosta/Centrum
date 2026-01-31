@@ -320,7 +320,7 @@
         Este instrumento se utiliza con fines académicos para pilotear un cuestionario de investigación doctoral.
         La participación es voluntaria y puede retirarse en cualquier momento cerrando esta página. Las respuestas
         se registran de forma anónima (sin nombres ni correos). Si decides continuar, confirmas que has leído y entendido
-        la información presentada.
+        la información presentada. Se genera un identificador anónimo en tu navegador para evitar duplicados.
       </p>
 
       <div class="notice">
@@ -461,6 +461,9 @@
       </div>
       <div class="foot" id="collectorFoot">
         Nota: Si el envío centralizado fallara por conectividad, podrás descargar un respaldo (JSON/CSV) para no perder la respuesta.
+      </div>
+      <div id="submittedNotice" class="foot muted hidden" style="margin-top:8px;">
+        Ya enviaste una respuesta desde este navegador; no puedes enviar otra desde este dispositivo. Si deseas enviar otra respuesta desde un dispositivo distinto, puedes hacerlo.
       </div>
     </section>
 
@@ -1099,6 +1102,8 @@
           timestamp_iso: new Date().toISOString(),
           note: "Este HTML no envía datos a servidor. El participante puede descargar sus respuestas (JSON/CSV)."
         },
+        // Identificador anónimo para evitar duplicados (almacenado en localStorage)
+        anon_id: state.anon_id || localStorage.getItem('bita_anon_id') || null,
         consent: state.consent,
         demographics: state.demographics,
         responses: state.responses,
@@ -1235,12 +1240,46 @@
       state.demographics[f.id] = "";
     });
 
+    // ANON ID helpers: generate/store an anonymous id in localStorage to help deduplication
+    function ensureAnonId(){
+      try{
+        let id = localStorage.getItem('bita_anon_id');
+        if(!id){
+          if(window.crypto && crypto.randomUUID) id = crypto.randomUUID();
+          else id = 'anon-' + Date.now() + '-' + Math.floor(Math.random()*1e6);
+          localStorage.setItem('bita_anon_id', id);
+        }
+        state.anon_id = id;
+        return id;
+      }catch(e){
+        return null;
+      }
+    }
+
+    function getSubmissionMark(){
+      try{ const raw = localStorage.getItem('bita_submitted'); return raw ? JSON.parse(raw) : null; }catch(e){ return null; }
+    }
+    function markSubmitted(receipt){
+      try{
+        const mark = { receipt: receipt, ts: new Date().toISOString(), anon_id: state.anon_id || localStorage.getItem('bita_anon_id') };
+        localStorage.setItem('bita_submitted', JSON.stringify(mark));
+      }catch(e){ }
+    }
+    function hasSubmitted(){ return !!getSubmissionMark(); }
+
     // Accessibility: keyboard hint
     document.addEventListener("DOMContentLoaded", ()=>{
       const collectorNotice = document.getElementById("collectorNotice");
       if(collectorNotice && ENABLE_CENTRAL_COLLECTION) collectorNotice.style.display = "block";
 
       const btnSubmit = document.getElementById("btnSubmit");
+      // ensure anon id exists and check previous submission
+      ensureAnonId();
+      if(btnSubmit && hasSubmitted()){
+        btnSubmit.disabled = true;
+        btnSubmit.textContent = "Respuesta enviada";
+        showToast("Ya enviaste una respuesta desde este navegador.");
+      }
       if(btnSubmit){
         btnSubmit.addEventListener("click", async ()=>{
           // sincroniza comentarios (si tu JS lo hace distinto, respétalo)
@@ -1268,6 +1307,9 @@
 
           if(sendRes.ok){
             const receipt = sendRes.data?.receipt_id || sendRes.data?.id || sendRes.data?.rowId || "";
+            // mark as submitted locally to prevent accidental resubmits
+            try{ if(receipt) markSubmitted(receipt); else markSubmitted('unknown'); }catch(e){}
+            if(btnSubmit){ btnSubmit.disabled = true; btnSubmit.textContent = "Respuesta enviada"; }
             showSendOverlay("Envío exitoso ✅", receipt ? ("Código: " + receipt) : "Envío completado", false);
             showToast("Envío exitoso ✅");
             setTimeout(()=> hideSendOverlay(), 1400);
