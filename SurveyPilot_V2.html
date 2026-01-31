@@ -453,6 +453,7 @@
       <div class="btnbar" style="margin-top:14px;">
         <button id="btnValidate" type="button">Validar respuestas</button>
         <button id="btnSubmit" type="button">Finalizar y enviar</button>
+        <button class="secondary" id="btnSimulate" type="button">Simular envío (respuesta local)</button>
         <button class="secondary" id="btnDownloadCSV" type="button">Descargar CSV</button>
         <button class="secondary" id="btnSaveLocal" type="button">Guardar borrador en este navegador</button>
         <button class="secondary" id="btnLoadLocal" type="button">Cargar borrador</button>
@@ -1179,6 +1180,33 @@
 
     document.getElementById("btnLoadLocal").addEventListener("click", ()=>{
       loadLocal();
+    });
+
+    // Simulate send using local sample response to avoid re-filling during tests
+    document.getElementById("btnSimulate").addEventListener("click", async ()=>{
+      state.comments = document.getElementById("openComments").value || "";
+      const res = validateAll();
+      if(!res.ok){
+        alert("Antes de finalizar, completa lo pendiente:\n\n- " + res.problems.join("\n- "));
+        return;
+      }
+      const payload = buildPayload();
+
+      showSendOverlay("Simulando envío…", "Cargando respuesta local de prueba...");
+      try{
+        const r = await fetch('collector_sample_response.json');
+        const data = await r.json();
+        // pretend this came from the collector
+        showSendOverlay("Envío simulado ✅", data.receipt_id ? ("Código: " + data.receipt_id) : "Simulado", false);
+        showToast("Respuesta simulada cargada ✅");
+        setTimeout(()=> hideSendOverlay(), 1000);
+        alert("Simulación completada. Respuesta:\n" + JSON.stringify(data, null, 2));
+      }catch(e){
+        console.error('Error al cargar respuesta simulada', e);
+        showToast('No se pudo cargar respuesta local');
+        hideSendOverlay();
+        alert('No se pudo cargar la respuesta local de prueba. Verifica que collector_sample_response.json exista en el mismo origen.');
+      }
     });
 
     document.getElementById("btnReset").addEventListener("click", ()=>{
