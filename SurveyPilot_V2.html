@@ -239,6 +239,30 @@
     }
     .toast.show{ opacity:1; }
     .hidden{ display:none !important; }
+    /* Envío overlay */
+    .send-overlay{
+      position: fixed;
+      left: 0; right: 0; top: 0; bottom: 0;
+      display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,.45);
+      z-index: 9999;
+    }
+    .send-card{
+      display:flex; gap:12px; align-items:center;
+      background: rgba(255,255,255,.03);
+      border:1px solid var(--line);
+      padding: 14px 16px; border-radius: 12px;
+      box-shadow: var(--shadow);
+      color: var(--text);
+      max-width: 88%;
+    }
+    .send-card .spinner{
+      width:36px; height:36px; border-radius:50%;
+      border:4px solid rgba(255,255,255,.12);
+      border-top-color: var(--accent2);
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin{ to{ transform: rotate(360deg); } }
     .right{ text-align:right; }
     .grid2{
       display:grid;
@@ -261,6 +285,15 @@
 
 <body>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div id="sendOverlay" class="send-overlay hidden" role="status" aria-live="polite" aria-hidden="true">
+    <div class="send-card" id="sendCard">
+      <div class="spinner" aria-hidden="true"></div>
+      <div>
+        <div id="sendStatusTitle" style="font-weight:700">Enviando respuestas…</div>
+        <div id="sendStatusText" class="muted small">Por favor espera mientras enviamos tus respuestas al servidor.</div>
+      </div>
+    </div>
+  </div>
 
   <div class="wrap">
     <header>
@@ -758,6 +791,26 @@
       setTimeout(()=>toast.classList.remove("show"), 2200);
     }
 
+    function showSendOverlay(title, text, isError=false){
+      const ov = document.getElementById("sendOverlay");
+      const titleEl = document.getElementById("sendStatusTitle");
+      const textEl = document.getElementById("sendStatusText");
+      titleEl.textContent = title || "Enviando…";
+      textEl.textContent = text || "Por favor espera...";
+      ov.classList.remove("hidden");
+      ov.setAttribute("aria-hidden", "false");
+      const spinner = ov.querySelector('.spinner');
+      if(spinner) spinner.style.display = isError ? 'none' : '';
+    }
+
+    function hideSendOverlay(){
+      const ov = document.getElementById("sendOverlay");
+      ov.classList.add("hidden");
+      ov.setAttribute("aria-hidden", "true");
+      const spinner = ov.querySelector('.spinner');
+      if(spinner) spinner.style.display = '';
+    }
+
     function scrollToId(id){
       const el = document.getElementById(id);
       if(el) el.scrollIntoView({behavior:"smooth", block:"start"});
@@ -1174,7 +1227,8 @@
 
           const payload = buildPayload();
 
-          // 1) Intentar envío centralizado
+          // 1) Intentar envío centralizado (con indicador visual)
+          showSendOverlay("Enviando respuestas…", "Enviando al servidor, por favor espera.");
           showToast("Enviando respuestas…");
           btnSubmit.disabled = true;
           btnSubmit.textContent = "Enviando…";
@@ -1186,7 +1240,9 @@
 
           if(sendRes.ok){
             const receipt = sendRes.data?.receipt_id || sendRes.data?.id || sendRes.data?.rowId || "";
+            showSendOverlay("Envío exitoso ✅", receipt ? ("Código: " + receipt) : "Envío completado", false);
             showToast("Envío exitoso ✅");
+            setTimeout(()=> hideSendOverlay(), 1400);
             alert(
               "¡Gracias! Tu respuesta fue enviada correctamente." +
               (receipt ? ("\n\nCódigo de registro: " + receipt) : "")
@@ -1196,12 +1252,15 @@
 
           // 2) Si falla, no perder datos: descargar respaldo
           console.error("Collector error:", sendRes);
+          showSendOverlay("Error de envío", "No se pudo enviar. Generando respaldo y descargando copia...", true);
           showToast("No se pudo enviar. Generando respaldo…");
 
           const ts = new Date().toISOString().slice(0,19).replaceAll(":","-");
           download(`respuestas_bita_piloto_${ts}.json`, JSON.stringify(payload, null, 2), "application/json");
           const csv = toCSV(payload);
           download(`respuestas_bita_piloto_${ts}.csv`, csv, "text/csv");
+
+          setTimeout(()=> hideSendOverlay(), 1200);
 
           alert(
             "No se pudo completar el envío centralizado (posible problema de red o del servidor).\n\n" +
