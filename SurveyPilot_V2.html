@@ -994,6 +994,8 @@
         box.appendChild(lab);
 
         let input;
+        let help;
+        let helpBtn;
         if(field.type === "select"){
           const selectWrap = document.createElement("div");
           selectWrap.className = field.help ? "select-with-help" : "";
@@ -1013,14 +1015,14 @@
           selectWrap.appendChild(input);
 
           if(field.help){
-            const helpBtn = document.createElement("button");
+            helpBtn = document.createElement("button");
             helpBtn.type = "button";
             helpBtn.className = "help-btn";
             helpBtn.setAttribute("aria-label", `Ayuda: ${field.label}`);
             helpBtn.setAttribute("aria-expanded", "false");
             helpBtn.textContent = "?";
 
-            const help = document.createElement("div");
+            help = document.createElement("div");
             help.className = "help-pop";
             help.setAttribute("role", "tooltip");
             help.textContent = field.help;
@@ -1060,6 +1062,16 @@
 
         input.addEventListener("change", ()=>{
           state.demographics[field.id] = input.value;
+          if(help && helpBtn){
+            help.classList.remove("show");
+            helpBtn.setAttribute("aria-expanded", "false");
+          }
+        });
+        input.addEventListener("blur", ()=>{
+          if(help && helpBtn){
+            help.classList.remove("show");
+            helpBtn.setAttribute("aria-expanded", "false");
+          }
         });
 
         elDemographics.appendChild(box);
