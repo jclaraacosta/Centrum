@@ -407,7 +407,14 @@
           alcance y arquitectura (AYA) y habilidades (HAB). Responde describiendo el estado actual de tu organización.
         </p>
       </details>
-
+      <details>
+        <summary>Complejidad del proyecto (Baja / Media / Alta)</summary>
+        <p class="muted">
+          Referencia rápida: <strong>Baja</strong> = alcance acotado, pocas áreas/stakeholders, mínima integración y cambio;
+          <strong>Media</strong> = varias áreas, algunas integraciones y cambio relevante;
+          <strong>Alta</strong> = impacto transversal, múltiples integraciones (core/legacy) y alta gestión del cambio.
+        </p>
+      </details>
       <details>
         <summary>“Últimos 24 meses”</summary>
         <p class="muted">
@@ -751,6 +758,7 @@
       {
         id: "complejidad",
         label: "Complejidad percibida del proyecto",
+        help: "Baja: acotado/pocas integraciones y cambio; Media: varias áreas + algunas integraciones; Alta: transversal + múltiples integraciones + alto cambio.",
         type: "select",
         required: true,
         options: ["Baja","Media","Alta"],
@@ -959,6 +967,14 @@
         });
 
         box.appendChild(input);
+        // Help text (si existe)
+        if(field.help){
+          const help = document.createElement("div");
+          help.className = "muted small";
+          help.style.marginTop = "6px";
+          help.textContent = field.help;
+          box.appendChild(help);
+        }
         elDemographics.appendChild(box);
       });
     }
